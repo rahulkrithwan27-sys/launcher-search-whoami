@@ -54,6 +54,7 @@
     background-color: rgba(255, 255, 255, 0.08);
     margin: 8px 12px;
 }
-launcher-result-row:selected {
-    background-color: rgba(130, 110, 255, 0.30);
+.row-selected {
+    background-color: rgba(130, 110, 255, 0.40);
+    border-radius: 10px;
 }
