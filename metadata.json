@@ -1,0 +1,7 @@
+{
+  "uuid": "launcher-search@whoami",
+  "name": "App Launcher Search",
+  "description": "A panel search that finds and launches your installed apps.",
+  "shell-version": ["42", "43", "44", "45", "46"],
+  "version": 1
+}

@@ -1,0 +1,56 @@
+/* ===== Launcher dropdown styling ===== */
+
+/* the search box */
+.launcher-search-entry {
+    width: 420px;
+    margin: 6px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    font-size: 15px;
+    color: #ffffff;
+}
+.launcher-search-entry:focus {
+    border: 1px solid rgba(130, 110, 255, 0.6);
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+/* section headers ("What you can do", "Your apps") */
+.launcher-section-header {
+    padding: 12px 14px 6px 14px;
+    font-size: 11px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+/* a result / tip / app row */
+.launcher-result-row {
+    border-radius: 10px;
+    margin: 1px 6px;
+    padding: 4px;
+    transition-duration: 120ms;
+}
+.launcher-result-row:hover,
+.launcher-result-row:focus {
+    background-color: rgba(130, 110, 255, 0.18);
+}
+
+/* primary line of text in a row */
+.launcher-row-title {
+    font-size: 14px;
+    color: #f0f0f0;
+}
+
+/* secondary / hint line */
+.launcher-row-sub {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.40);
+}
+
+/* separators */
+.launcher-sep {
+    height: 1px;
+    background-color: rgba(255, 255, 255, 0.08);
+    margin: 8px 12px;
+}
