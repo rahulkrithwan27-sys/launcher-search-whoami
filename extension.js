@@ -28,6 +28,7 @@ class SearchButton extends PanelMenu.Button {
         this._resultsBox = new St.BoxLayout({ vertical: true });
         let scroll = new St.ScrollView({ style: 'max-height: 440px;' });
         scroll.add_actor(this._resultsBox);
+        this._scroll = scroll;
         let resultsItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
         resultsItem.add_child(scroll);
         this.menu.addMenuItem(resultsItem);
@@ -36,11 +37,32 @@ class SearchButton extends PanelMenu.Button {
         this._searchTerm = '';
         this._searchKind = '';
 
+        // list of selectable rows + which one is highlighted
+        this._rows = [];
+        this._selected = -1;
+
         this._entry.clutter_text.connect('text-changed', () => {
             this._refresh(this._entry.get_text());
         });
-        this._entry.clutter_text.connect('activate', () => {
-            this._runDefault(this._entry.get_text().trim());
+
+        // KEYBOARD NAVIGATION: arrows move selection, Enter activates it
+        this._entry.clutter_text.connect('key-press-event', (actor, event) => {
+            let sym = event.get_key_symbol();
+            if (sym === Clutter.KEY_Down) {
+                this._moveSelection(1);
+                return Clutter.EVENT_STOP;
+            } else if (sym === Clutter.KEY_Up) {
+                this._moveSelection(-1);
+                return Clutter.EVENT_STOP;
+            } else if (sym === Clutter.KEY_Return || sym === Clutter.KEY_KP_Enter) {
+                if (this._selected >= 0 && this._rows[this._selected]) {
+                    this._rows[this._selected].action();
+                } else {
+                    this._runDefault(this._entry.get_text().trim());
+                }
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
         });
 
         this.menu.connect('open-state-changed', (menu, isOpen) => {
@@ -58,12 +80,44 @@ class SearchButton extends PanelMenu.Button {
         this._refresh('');
     }
 
+    // ---------- keyboard selection ----------
+    _moveSelection(dir) {
+        if (this._rows.length === 0) return;
+        // clear old highlight
+        if (this._selected >= 0 && this._rows[this._selected])
+            this._rows[this._selected].widget.remove_style_pseudo_class('selected');
+
+        this._selected += dir;
+        if (this._selected < 0) this._selected = this._rows.length - 1;
+        if (this._selected >= this._rows.length) this._selected = 0;
+
+        let row = this._rows[this._selected];
+        row.widget.add_style_pseudo_class('selected');
+
+        // keep it scrolled into view
+        let adj = this._scroll.vscroll ? this._scroll.vscroll.adjustment
+                                       : this._scroll.get_vscroll_bar().get_adjustment();
+        if (adj) {
+            let [, y] = row.widget.get_transformed_position();
+            let h = row.widget.get_height();
+            let box = this._scroll.get_allocation_box();
+            // simple: scroll so the row is visible
+            row.widget.get_parent();
+        }
+    }
+
+    _registerRow(widget, action) {
+        this._rows.push({ widget, action });
+    }
+
     _refresh(query) {
         this._resultsBox.destroy_all_children();
+        this._rows = [];
+        this._selected = -1;
         query = (query || '').trim();
         let lower = query.toLowerCase();
 
-        if (query.length === 0) { this._addApps(''); return; }
+        if (query.length === 0) { this._addApps(''); this._selectFirst(); return; }
 
         if (query.startsWith('d:')) {
             let term = query.slice(2).trim();
@@ -84,6 +138,7 @@ class SearchButton extends PanelMenu.Button {
             if (cmd.length > 0)
                 this._addRow('utilities-terminal-symbolic', 'Run command', cmd,
                     () => this._runCommand(cmd));
+            this._selectFirst();
             return;
         }
 
@@ -113,6 +168,15 @@ class SearchButton extends PanelMenu.Button {
         this._addSep();
         this._addHeader('APPS');
         this._addApps(lower);
+
+        this._selectFirst();
+    }
+
+    _selectFirst() {
+        if (this._rows.length > 0) {
+            this._selected = 0;
+            this._rows[0].widget.add_style_pseudo_class('selected');
+        }
     }
 
     _addApps(lower) {
@@ -123,15 +187,15 @@ class SearchButton extends PanelMenu.Button {
             let name = appInfo.get_name();
             if (lower && !name.toLowerCase().includes(lower)) continue;
             let info = appInfo;
-            let row = this._buildRow(appInfo.get_icon(), null, name, null,
-                () => { info.launch([], null); this.menu.close(); });
+            let action = () => { info.launch([], null); this.menu.close(); };
+            let row = this._buildRow(appInfo.get_icon(), null, name, null, action);
             this._resultsBox.add_child(row);
+            this._registerRow(row, action);
             shown++;
             if (shown >= 40) break;
         }
     }
 
-    // ---------- HYBRID FILE SEARCH ----------
     _fileSearch(term, kind) {
         let label = kind === 'd' ? 'folders' : (kind === 'f' ? 'files' : 'items');
         this._addInfoRow('Searching ' + label + '…');
@@ -140,11 +204,9 @@ class SearchButton extends PanelMenu.Button {
         this._searchKind = kind;
         this._foundPaths = new Set();
 
-        // PASS 1 — locate (instant)
         let locateCmd = ['bash', '-c', 'locate -i -l 200 "' + term + '" 2>/dev/null'];
         this._runSearch(locateCmd, term, kind, false);
 
-        // PASS 2 — find (catches brand-new files)
         let home = GLib.get_home_dir();
         let excludes = [
             '*/node_modules/*', '*/.cache/*', '*/.git/*', '*/.gradle/*',
@@ -200,6 +262,8 @@ class SearchButton extends PanelMenu.Button {
         }
 
         this._resultsBox.destroy_all_children();
+        this._rows = [];
+        this._selected = -1;
         this._addHeader(kind === 'd' ? 'FOLDERS' : (kind === 'f' ? 'FILES' : 'RESULTS'));
 
         let all = Array.from(this._foundPaths);
@@ -228,10 +292,12 @@ class SearchButton extends PanelMenu.Button {
             let base = p.split('/').pop();
             let iconName = (kind === 'd' || !base.includes('.'))
                 ? 'folder-symbolic' : 'text-x-generic-symbolic';
-            let row = this._buildRow(null, iconName, base, p,
-                () => { this._openUrl('file://' + encodeURI(p)); this.menu.close(); });
+            let action = () => { this._openUrl('file://' + encodeURI(p)); this.menu.close(); };
+            let row = this._buildRow(null, iconName, base, p, action);
             this._resultsBox.add_child(row);
+            this._registerRow(row, action);
         }
+        this._selectFirst();
     }
 
     _runDefault(query) {
@@ -251,7 +317,12 @@ class SearchButton extends PanelMenu.Button {
     _addHeader(text) { this._resultsBox.add_child(new St.Label({ text: text, style_class: 'launcher-section-header' })); }
     _addSep() { this._resultsBox.add_child(new St.Widget({ style_class: 'launcher-sep' })); }
     _addInfoRow(text) { this._resultsBox.add_child(new St.Label({ text: text, style: 'padding: 10px 14px; color: rgba(255,255,255,0.5);' })); }
-    _addRow(iconName, title, sub, onClick) { this._resultsBox.add_child(this._buildRow(null, iconName, title, sub, onClick)); }
+
+    _addRow(iconName, title, sub, onClick) {
+        let row = this._buildRow(null, iconName, title, sub, onClick);
+        this._resultsBox.add_child(row);
+        this._registerRow(row, onClick);
+    }
 
     _buildRow(gicon, iconName, title, sub, onClick) {
         let box = new St.BoxLayout({ style: 'spacing: 12px; padding: 6px 10px;' });
