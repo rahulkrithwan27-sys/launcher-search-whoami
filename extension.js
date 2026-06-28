@@ -85,14 +85,14 @@ class SearchButton extends PanelMenu.Button {
         if (this._rows.length === 0) return;
         // clear old highlight
         if (this._selected >= 0 && this._rows[this._selected])
-            this._rows[this._selected].widget.remove_style_pseudo_class('selected');
+            this._rows[this._selected].widget.remove_style_class_name('row-selected');
 
         this._selected += dir;
         if (this._selected < 0) this._selected = this._rows.length - 1;
         if (this._selected >= this._rows.length) this._selected = 0;
 
         let row = this._rows[this._selected];
-        row.widget.add_style_pseudo_class('selected');
+        row.widget.add_style_class_name('row-selected');
 
         // keep it scrolled into view
         let adj = this._scroll.vscroll ? this._scroll.vscroll.adjustment
@@ -175,7 +175,7 @@ class SearchButton extends PanelMenu.Button {
     _selectFirst() {
         if (this._rows.length > 0) {
             this._selected = 0;
-            this._rows[0].widget.add_style_pseudo_class('selected');
+            this._rows[0].widget.add_style_class_name('row-selected');
         }
     }
 
